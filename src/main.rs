@@ -1,26 +1,29 @@
 // set up basic TCP server
 use anyhow;
 use serde::Deserialize;
-use std::error;
 use std::fmt;
 use std::fs::File;
-use std::io;
 use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::net::{TcpListener, TcpStream};
-use std::time::Duration;
+use tokio;
+use futures::future;
 
-fn main() {
-    // start
-    // TODO handle errors
-    // TODO make async
-    // TODO connection check for port, not just ping server ip
-    let server: Vec<Server> = get_servers_from_yaml().unwrap();
-    let servers: Vec<Server> = server
+// allow main to be async with tokio::main
+#[tokio::main]
+async fn main() {
+    let servers_with_status: Vec<Server> = check_health().await.expect("unable to do async health check on the servers"); // this is why main needs to be async...
+    println!("{servers_with_status:?}")
+}
+
+// check connection health for provided servers.
+async fn check_health() -> Result<Vec<Server>, anyhow::Error> {
+    let server_names: Vec<Server> = get_servers_from_yaml()?;
+    let servers = future::join_all(server_names
         .into_iter()
-        .map(|mut server| {
+        .map(|mut server| async {
             let socket_addr: SocketAddr = server.name.parse().expect("invalid address");
-            match TcpStream::connect_timeout(&socket_addr, Duration::from_millis(20000)) {
+            match tokio::net::TcpStream::connect(&socket_addr).await {
                 Ok(_) => server.can_connect = true,
                 Err(e) if e.kind() == std::io::ErrorKind::ConnectionRefused => {
                     server.can_connect = false
@@ -28,9 +31,8 @@ fn main() {
                 Err(_) => server.can_connect = false,
             }
             server
-        })
-        .collect();
-    println!("{servers:?}");
+        })).await;
+    Ok(servers)
 }
 
 // TODO use this once we're ready to start receiving connections.
