@@ -35,42 +35,24 @@ async fn check_health() -> Result<Vec<Server>, anyhow::Error> {
     Ok(servers)
 }
 
-// TODO use this once we're ready to start receiving connections.
-fn start_server() -> Result<(), anyhow::Error> {
-    let listener = TcpListener::bind("127.0.0.1:43000")?;
-    println!("Server listening on 127.0.0.1:43000");
-
-    // Accept connections and handle them
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                println!("New connection: {}", stream.peer_addr()?);
-                handle_client(stream)?;
-            }
-            Err(e) => eprintln!("Error accepting connection: {}", e),
-        }
-    }
-
-    Ok(())
-}
-
-fn handle_client(mut stream: TcpStream) -> std::io::Result<()> {
-    let mut buffer = [0; 512];
-
-    // Read data from the client
-    let bytes_read = stream.read(&mut buffer)?;
-
-    // 0 bytes is disconnect
-    if bytes_read == 0 {
-        // Do nothing?
-        return Ok(());
-    }
-
-    // Send the same data back to the client (Echo)
-    stream.write_all(&buffer[..bytes_read])?;
-    stream.flush()?;
-
-    Ok(())
+// Only shows current available servers.
+async fn available_servers() -> Result<Vec<Server>, anyhow::Error> {
+    let server_names: Vec<Server> = get_servers_from_yaml()?;
+    let servers: Vec<Server> = future::join_all(server_names
+        .into_iter()
+        .map(|mut server| async move {
+            let socket_addr: SocketAddr = server.name.parse().expect("invalid address");
+            if tokio::net::TcpStream::connect(&socket_addr).await.is_ok() {
+                    server.can_connect = true;
+                    Some(server)
+            } else {
+                    None
+                }
+        })).await
+        .into_iter()
+        .flatten() // only keep Some()
+        .collect();
+    Ok(servers)
 }
 
 // server state tracking: ip:port, up? can we connect to it?, number of connections
@@ -93,7 +75,7 @@ fn get_servers_from_yaml() -> Result<Vec<Server>, anyhow::Error> {
     let servers: Vec<Server> = server_names
         .into_iter()
         .map(|name| Server {
-            name: name,
+            name,
             ..Default::default()
         })
         .collect();
