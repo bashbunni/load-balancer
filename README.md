@@ -62,4 +62,21 @@ Step 1. We start with static. The goal here is to get an idea of the simplest po
 
 ## Development
 
-To pretend we have servers to connect to use an nginx docker container `docker run -d -p 43003:80 nginx`
+To build our load balancer there are several additional items to consider.
+
+### Challenges 
+
+While building a load balancer is a challenge, writing the program is a solvable well scoped problem. Where we run into hurdles is putting together the apparatus that assists with development and testing. 
+
+In order to build and test the program we need two additional elements to sandwich our load balancer:
+
+1. *Traffic Generation* - Something to generate connections/requests placed “in front of” the load balancer - e.g. Curl, Postman, or a browser. As the program grows in complexity, we will need to orchestrate a solution to generate a large volume of traffic programmatically in order to verify that traffic is spread to destinations according to policy. 
+2. *Traffic Destination(s)* - Something to accept connections/requests “behind” the load balancer. This could be a series simple nginx containers or template web apps. Most importantly, this destination needs to easily verify traffic through logging or exposed metrics.
+
+### Destinations
+
+To pretend we have servers to connect to use...
+
+Level 0: nginx docker container `docker run -d -p 43003:80 nginx`
+
+Level 1: _TODO_
